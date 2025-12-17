@@ -1,5 +1,9 @@
 import os
 import asyncio
+import os
+import asyncio
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler  # <-- ОБЯЗАТЕЛЬНО
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import (
     Message,
