@@ -17,7 +17,7 @@ from aiogram.fsm.state import StatesGroup, State
 # ---------------------------
 # Токен из переменной окружения
 # ---------------------------
-BOT TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
     raise ValueError("❌ Переменная окружения TOKEN не задана")
