@@ -1,23 +1,16 @@
 import os
 import asyncio
-import os
-import asyncio
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler  # <-- ОБЯЗАТЕЛЬНО
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import (
-    Message,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    FSInputFile
+    Message, ReplyKeyboardMarkup, KeyboardButton,
+    InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 )
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import StatesGroup, State
-
 
 # ---------------------------
 # Dummy HTTP сервер для Render Free Plan
@@ -32,14 +25,12 @@ def run_dummy_server():
     server = HTTPServer(("0.0.0.0", 10000), DummyHandler)
     server.serve_forever()
 
-# Запуск HTTP сервера в отдельном потоке
 threading.Thread(target=run_dummy_server, daemon=True).start()
 
 # ---------------------------
 # Токен из переменной окружения
 # ---------------------------
 TOKEN = os.getenv("TOKEN")
-
 if not TOKEN:
     raise ValueError("❌ Переменная окружения TOKEN не задана")
 
@@ -76,7 +67,7 @@ local_images = {
     "Сербия": {
         "Ćevapčići (чевaпчичи)": os.path.join(BASE_DIR, "images", "Ćevapčići.jpg"),
         "Pljeskavica (плескавица)": os.path.join(BASE_DIR, "images", "Pljeskavica.jpg"),
-        "Burek": os.path.join(BASE_DIR, "images", "Burek.jpg)"
+        "Burek": os.path.join(BASE_DIR, "images", "Burek.jpg")
     }
 }
 
