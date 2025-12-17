@@ -76,7 +76,7 @@ local_images = {
     "Сербия": {
         "Ćevapčići (чевaпчичи)": os.path.join(BASE_DIR, "images", "Ćevapčići.jpg"),
         "Pljeskavica (плескавица)": os.path.join(BASE_DIR, "images", "Pljeskavica.jpg"),
-        "Burek": os.path.join(BASE_DIR, "images", "Burek.jpg"
+        "Burek": os.path.join(BASE_DIR, "images", "Burek.jpg)"
     }
 }
 
