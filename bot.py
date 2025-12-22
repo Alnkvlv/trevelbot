@@ -325,5 +325,6 @@ async def checklist_toggle(callback: types.CallbackQuery, state: FSMContext):
 # ---------------------------
 # Запуск
 # ---------------------------
-if __name__ == "__main__":
-    asyncio.run(dp.start_polling(bot))
+@dp.message(Command("start"))
+async def start(message: types.Message):
+    await message.answer("Бот работает ✅")
