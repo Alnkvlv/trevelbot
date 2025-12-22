@@ -5,7 +5,10 @@ from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
     KeyboardButton,
-    FSInputFile
+    FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    CallbackQuery
 )
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -35,6 +38,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 def img(name: str):
     return os.path.join(BASE_DIR, "images", name)
 
+# ==============================
+# Local images
+# ==============================
 local_images = {
     "Россия": {
         "Красная площадь": img("RedSquare.jpg"),
@@ -132,6 +138,23 @@ def section_keyboard():
         resize_keyboard=True
     )
 
+def back_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="⬅ Назад")]],
+        resize_keyboard=True
+    )
+
+# ==============================
+# Carousel navigation
+# ==============================
+def nav_keyboard(prefix, index, max_i):
+    buttons = []
+    if index > 0:
+        buttons.append(InlineKeyboardButton("⬅️", callback_data=f"{prefix}_{index-1}"))
+    if index < max_i - 1:
+        buttons.append(InlineKeyboardButton("➡️", callback_data=f"{prefix}_{index+1}"))
+    return InlineKeyboardMarkup(inline_keyboard=[buttons])
+
 # ==============================
 # DATA
 # ==============================
@@ -162,7 +185,7 @@ countries_info = {
         "Требуемые документы": "🛂 Паспорт, страховка.",
         "Список вещей, которые стоит взять": "🎒 Удобная одежда.",
         "Популярные места для посещения": "Калемегдан, Скадарлия, Златибор",
-        "Национальная кухня": "Ćevapčići, Pljeskavica, Burek",
+        "Национальная кухня": "cevapcici, pljeskavica, burek",
     },
     "Казахстан": {
         "Важные правила и особенности": "🇰🇿 Большая страна с разным климатом.",
@@ -212,21 +235,66 @@ async def choose_section(message: Message, state: FSMContext):
     country = data.get("country")
     section = message.text
 
+    if section == "⬅ Назад":
+        await state.set_state(Form.section)
+        await message.answer("📂 Выберите раздел:", reply_markup=section_keyboard())
+        return
+
     info = countries_info[country].get(section)
-    if info:
-        await message.answer(info)
+    if not info:
+        await message.answer("❌ Раздел не найден", reply_markup=back_keyboard())
+        return
 
-    # ===== ОТПРАВКА КАРТИНОК =====
-    images_for_country = local_images.get(country, {})
+    # Разделы с каруселью
+    if section in ["Популярные места для посещения", "Национальная кухня"]:
+        images_for_country = local_images.get(country, {})
+        items = [i.strip() for i in info.split(",")]
 
-    for title, path in images_for_country.items():
-        if title in str(info):
-            if os.path.exists(path):
-                caption = serbia_food_captions.get(title, title)
-                await message.answer_photo(
-                    photo=FSInputFile(path),
-                    caption=caption
-                )
+        if not items:
+            await message.answer("❌ Нет доступных фото", reply_markup=back_keyboard())
+            return
+
+        path = images_for_country.get(items[0])
+        if path and os.path.exists(path):
+            caption = serbia_food_captions.get(items[0], f"{items[0]} ➡️ 1/{len(items)}")
+            await message.answer_photo(
+                photo=FSInputFile(path),
+                caption=caption,
+                reply_markup=nav_keyboard(f"{country}_{section}", 0, len(items))
+            )
+        return
+
+    # Для обычных разделов — текст
+    await message.answer(info, reply_markup=back_keyboard())
+
+# ==============================
+# Callback handler для карусели
+# ==============================
+@dp.callback_query()
+async def carousel_callback(call: CallbackQuery):
+    data = call.data  # формат: country_section_index
+    try:
+        country, section, index = data.rsplit("_", 2)
+        index = int(index)
+    except ValueError:
+        await call.answer()
+        return
+
+    items = [i.strip() for i in countries_info[country][section].split(",")]
+    path = local_images.get(country, {}).get(items[index])
+
+    if path and os.path.exists(path):
+        caption = serbia_food_captions.get(items[index], f"{items[index]} ➡️ {index+1}/{len(items)}")
+        await call.message.edit_media(
+            media=FSInputFile(path),
+            caption=caption,
+        )
+        await call.message.edit_reply_markup(
+            reply_markup=nav_keyboard(f"{country}_{section}", index, len(items))
+        )
+
+    await call.answer()
+
 # ==============================
 # Webhook lifecycle
 # ==============================
