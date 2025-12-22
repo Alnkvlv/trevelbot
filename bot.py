@@ -1,5 +1,6 @@
 import os
 from aiohttp import web
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import (
     Message, ReplyKeyboardMarkup, KeyboardButton,
@@ -148,9 +149,19 @@ def section_keyboard():
 def nav_keyboard(prefix, index, max_i):
     buttons = []
     if index > 0:
-        buttons.append(InlineKeyboardButton("⬅️", callback_data=f"{prefix}_{index-1}"))
+        buttons.append(
+            InlineKeyboardButton(
+                text="⬅️",
+                callback_data=f"{prefix}_{index - 1}",
+            )
+        )
     if index < max_i:
-        buttons.append(InlineKeyboardButton("➡️", callback_data=f"{prefix}_{index+1}"))
+        buttons.append(
+            InlineKeyboardButton(
+                text="➡️",
+                callback_data=f"{prefix}_{index + 1}",
+            )
+        )
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
 # ======================================================
@@ -192,7 +203,6 @@ async def choose_section(message: Message, state: FSMContext):
 
     if section == "Популярные места для посещения":
         places = countries_info[country][section]
-        await state.update_data(place_index=0)
         name = places[0]
         image = local_images.get(country, {}).get(name) or local_images["Сербия"]["default"]
         await message.answer_photo(
@@ -203,7 +213,6 @@ async def choose_section(message: Message, state: FSMContext):
 
     if section == "Национальная кухня":
         foods = countries_info[country][section]
-        await state.update_data(food_index=0)
         key = foods[0]
         caption = serbia_food_captions.get(key, key)
         image = local_images[country].get(key, local_images["Сербия"]["default"])
@@ -223,7 +232,7 @@ async def food_nav(call: types.CallbackQuery, state: FSMContext):
     caption = serbia_food_captions.get(key, key)
     image = local_images[country].get(key, local_images["Сербия"]["default"])
     await call.message.edit_media(
-        types.InputMediaPhoto(FSInputFile(image), caption=caption),
+        types.InputMediaPhoto(media=FSInputFile(image), caption=caption),
         reply_markup=nav_keyboard("food", i, len(foods) - 1),
     )
     await call.answer()
@@ -237,7 +246,7 @@ async def place_nav(call: types.CallbackQuery, state: FSMContext):
     name = places[i]
     image = local_images.get(country, {}).get(name) or local_images["Сербия"]["default"]
     await call.message.edit_media(
-        types.InputMediaPhoto(FSInputFile(image), caption=name),
+        types.InputMediaPhoto(media=FSInputFile(image), caption=name),
         reply_markup=nav_keyboard("place", i, len(places) - 1),
     )
     await call.answer()
