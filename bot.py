@@ -1,7 +1,12 @@
 import os
 from aiohttp import web
 from aiogram import Bot, Dispatcher
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import (
+    Message,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    FSInputFile
+)
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -24,6 +29,74 @@ dp = Dispatcher(storage=MemoryStorage())
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://trevelbot-2.onrender.com{WEBHOOK_PATH}"
 PORT = int(os.getenv("PORT", 10000))
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def img(name: str):
+    return os.path.join(BASE_DIR, "images", name)
+
+local_images = {
+    "Россия": {
+        "Красная площадь": img("RedSquare.jpg"),
+        "Эрмитаж": img("Эрмитаж.jpg"),
+        "Байкал": img("Байкал.jpg"),
+        "Борщ": img("Borsh.jpg"),
+        "Пельмени": img("Pelmeni.jpg"),
+        "Блины": img("Blini.jpg"),
+    },
+    "Франция": {
+        "Эйфелева башня": img("EiffelTower.jpg"),
+        "Лувр": img("Лувр.jpg"),
+        "Версаль": img("Версаль.jpg"),
+        "Круассаны": img("Круассаны.jpg"),
+        "Багеты": img("Багеты.jpg"),
+        "Сыр": img("Сыр.jpg"),
+    },
+    "Япония": {
+        "Токийская башня": img("TokyoTower.jpg"),
+        "Киото": img("Kyoto.jpg"),
+        "Фудзи": img("Fuji.jpg"),
+        "Суши": img("Sushi.jpg"),
+        "Рамен": img("Ramen.jpg"),
+        "Тэмпура": img("Tempura.jpg"),
+    },
+    "Сербия": {
+        "cevapcici": img("Cevapcici.jpg"),
+        "pljeskavica": img("Pljeskavica.jpg"),
+        "burek": img("Burek.jpg"),
+        "default": img("Cevapcici.jpg"),
+    },
+    "Казахстан": {
+        "Монумент Байтерек": img("монумент Байтерек.jpg"),
+        "ТЦ «Хан-Шатыр»": img("ТЦ «Хан-Шатыр».jpg"),
+        "Дворец мира": img("Дворец мира.jpg"),
+        "Бешбармак": img("Бешбармак.jpg"),
+        "Казы": img("Казы.jpg"),
+        "Кумыс и шубат": img("Кумыс и шубат.jpeg"),
+    },
+    "Южная Корея": {
+        "Дворец Кёнбоккун": img("Дворец Кёнбоккун.jpg"),
+        "Улицы Мёндон и Хондэ": img("Улицы Мёндон и Хондэ.jpg"),
+        "Остров Чеджу": img("Остров Чеджу.jpg"),
+        "Бибимбап": img("Бибимбап.jpg"),
+        "Ттокпокки": img("Ттокпокки.jpg"),
+        "Сочжу": img("Сочжу.jpg"),
+    },
+    "США": {
+        "Статуя Свободы": img("Статуя Свободы.jpg"),
+        "Голливуд": img("Голливуд.jpg"),
+        "Белый дом": img("Белый дом.jpg"),
+        "Бургер": img("Бургер.jpg"),
+        "Стейк": img("Стейк.jpg"),
+        "Пицца": img("Пицца.jpg"),
+    },
+}
+
+serbia_food_captions = {
+    "cevapcici": "🍢 Ćevapčići — мясные колбаски с лепёшкой и айваром",
+    "pljeskavica": "🍔 Pljeskavica — балканский бургер",
+    "burek": "🥐 Burek — слоёный пирог с начинкой",
+}
 
 # ==============================
 # FSM
@@ -137,14 +210,23 @@ async def choose_country(message: Message, state: FSMContext):
 async def choose_section(message: Message, state: FSMContext):
     data = await state.get_data()
     country = data.get("country")
+    section = message.text
 
-    info = countries_info[country].get(message.text)
-    if not info:
-        await message.answer("❌ Раздел не найден")
-        return
+    info = countries_info[country].get(section)
+    if info:
+        await message.answer(info)
 
-    await message.answer(info)
+    # ===== ОТПРАВКА КАРТИНОК =====
+    images_for_country = local_images.get(country, {})
 
+    for title, path in images_for_country.items():
+        if title in str(info):
+            if os.path.exists(path):
+                caption = serbia_food_captions.get(title, title)
+                await message.answer_photo(
+                    photo=FSInputFile(path),
+                    caption=caption
+                )
 # ==============================
 # Webhook lifecycle
 # ==============================
