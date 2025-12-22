@@ -99,10 +99,6 @@ serbia_food_captions = {
     "pljeskavica": "🍔 Pljeskavica — балканский бургер",
     "burek": "🥐 Burek — слоёный пирог с начинкой",
 }
-
-# ======================================================
-# Data
-# ======================================================
 countries_info = {
     "Россия": {
         "Важные правила и особенности": "🇷🇺 Соблюдайте визовые и таможенные правила.",
@@ -319,7 +315,7 @@ async def choose_country(message: Message, state: FSMContext):
 async def choose_section(message: Message, state: FSMContext):
     data = await state.get_data()
     country = data["country"]
-    section = message.text
+    section = message.text.strip()
 
     if section == "Назад":
         await state.set_state(Form.country)
@@ -330,7 +326,13 @@ async def choose_section(message: Message, state: FSMContext):
         "Требуемые документы",
         "Список вещей, которые стоит взять",
     ]:
-        return await message.answer(countries_info[country][section])
+        text = countries_info[country].get(section)
+        if not text:
+            return await message.answer("⚠️ Раздел пока недоступен")
+        # Разбиваем текст на куски по 4000 символов
+        for i in range(0, len(text), 4000):
+            await message.answer(text[i:i+4000])
+        return
 
     if section == "Популярные места для посещения":
         places = countries_info[country][section]
