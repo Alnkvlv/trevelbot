@@ -1,7 +1,7 @@
 import os
 from aiohttp import web
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import Message, FSInputFile, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram import Bot, Dispatcher
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -18,15 +18,12 @@ if not TOKEN:
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 # ==============================
 # Webhook
 # ==============================
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://trevelbot-2.onrender.com{WEBHOOK_PATH}"
-PORT = int(os.getenv("PORT", 10000))  # Render предоставляет порт через переменную PORT
-
+PORT = int(os.getenv("PORT", 10000))
 # ======================================================
 # Images
 # ======================================================
@@ -250,7 +247,7 @@ class Form(StatesGroup):
 # Keyboards
 # ==============================
 def country_keyboard():
-    countries = ["Россия", "Франция", "Япония"]
+    countries = ["Россия", "Франция", "Япония", "Сербия", "Казахстан", "Южная Корея", "США"]
     keyboard = [[KeyboardButton(text=c)] for c in countries]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
@@ -259,15 +256,47 @@ def section_keyboard():
         "Важные правила и особенности",
         "Требуемые документы",
         "Список вещей, которые стоит взять",
-        "Популярные места для посещения"
+        "Популярные места для посещения",
+    ]
+    keyboard = [[KeyboardButton(text=s)] for s in sections]
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+# ==============================
+# Handlers
+# ==============================
+def country_keyboard():
+    countries = ["Россия", "Франция", "Япония", "Сербия", "Казахстан", "Южная Корея", "США"]
+    keyboard = [[KeyboardButton(text=c)] for c in countries]
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+
+def section_keyboard():
+    sections = [
+        "Важные правила и особенности",
+        "Требуемые документы",
+        "Список вещей, которые стоит взять",
+        "Популярные места для посещения",
     ]
     keyboard = [[KeyboardButton(text=s)] for s in sections]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 # ==============================
+# DATA
+# ==============================
+from typing import Dict
+
+countries_info: Dict[str, dict] = {
+    "США": {
+        "Важные правила и особенности": "🇺🇸 В США действуют разные законы в разных штатах.",
+        "Требуемые документы": "🛂 Паспорт + виза или ESTA.",
+        "Список вещей, которые стоит взять": "👟 Удобная обувь, документы, адаптер.",
+        "Популярные места для посещения": "Статуя Свободы, Голливуд, Белый дом",
+    }
+    # остальные страны у тебя уже есть — они остаются
+}
+
+# ==============================
 # Handlers
 # ==============================
-@dp.message(Command(commands=["start"]))
+@dp.message(Command("start"))
 async def start(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Form.country)
@@ -275,19 +304,40 @@ async def start(message: Message, state: FSMContext):
 
 @dp.message(Form.country)
 async def choose_country(message: Message, state: FSMContext):
-    await state.update_data(country=message.text)
+    country = message.text
+    if country not in countries_info:
+        await message.answer("❌ Такой страны нет в списке")
+        return
+
+    await state.update_data(country=country)
     await state.set_state(Form.section)
-    await message.answer("Выберите раздел:", reply_markup=section_keyboard())
+    await message.answer("📂 Выберите раздел:", reply_markup=section_keyboard())
+
+@dp.message(Form.section)
+async def choose_section(message: Message, state: FSMContext):
+    data = await state.get_data()
+    country = data.get("country")
+    section = message.text
+
+    if country not in countries_info:
+        await message.answer("❌ Сначала выберите страну")
+        return
+
+    info = countries_info[country].get(section)
+
+    if not info:
+        await message.answer("❌ Раздел не найден")
+        return
+
+    await message.answer(info)
 
 # ==============================
 # Webhook lifecycle
 # ==============================
 async def on_startup(bot: Bot):
-    # Установить webhook при старте
     await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
 
 async def on_shutdown(bot: Bot):
-    # Удалить webhook при завершении
     await bot.delete_webhook()
 
 # ==============================
@@ -296,8 +346,12 @@ async def on_shutdown(bot: Bot):
 def main():
     app = web.Application()
 
-    # Регистрация webhook
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+    # ⚠️ КРИТИЧНО: принимаем ТОЛЬКО POST
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot
+    ).register(app, path=WEBHOOK_PATH, method="POST")
+
     setup_application(app, dp, bot=bot)
 
     dp.startup.register(on_startup)
