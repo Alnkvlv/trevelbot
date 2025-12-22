@@ -296,7 +296,7 @@ def nav_keyboard(prefix, index, max_i):
 # ======================================================
 # Handlers
 # ======================================================
-@dp.message(Command("start"))
+lambda message: message.text == "/start"
 async def start(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Form.country)
