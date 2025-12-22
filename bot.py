@@ -1,8 +1,5 @@
 import os
-import asyncio
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-
+from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import (
     Message, ReplyKeyboardMarkup, KeyboardButton,
@@ -12,25 +9,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import StatesGroup, State
-
-# ======================================================
-# Dummy HTTP server for Render Free Plan
-# ======================================================
-class DummyHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
-
-    def do_HEAD(self):
-        self.send_response(200)
-        self.end_headers()
-
-def run_dummy_server():
-    server = HTTPServer(("0.0.0.0", 10000), DummyHandler)
-    server.serve_forever()
-
-threading.Thread(target=run_dummy_server, daemon=True).start()
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 # ======================================================
 # Token
@@ -43,6 +22,13 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ======================================================
+# Webhook settings
+# ======================================================
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = f"https://trevelbot-2.onrender.com{WEBHOOK_PATH}"
+PORT = 10000
 
 # ======================================================
 # Images
@@ -197,7 +183,11 @@ async def choose_section(message: Message, state: FSMContext):
         await state.set_state(Form.country)
         return await message.answer("🌍 Выберите страну:", reply_markup=country_keyboard())
 
-    if section in ["Важные правила и особенности", "Требуемые документы", "Список вещей, которые стоит взять"]:
+    if section in [
+        "Важные правила и особенности",
+        "Требуемые документы",
+        "Список вещей, которые стоит взять",
+    ]:
         return await message.answer(countries_info[country][section])
 
     if section == "Популярные места для посещения":
@@ -208,7 +198,7 @@ async def choose_section(message: Message, state: FSMContext):
         await message.answer_photo(
             FSInputFile(image),
             caption=name,
-            reply_markup=nav_keyboard("place", 0, len(places)-1),
+            reply_markup=nav_keyboard("place", 0, len(places) - 1),
         )
 
     if section == "Национальная кухня":
@@ -220,7 +210,7 @@ async def choose_section(message: Message, state: FSMContext):
         await message.answer_photo(
             FSInputFile(image),
             caption=caption,
-            reply_markup=nav_keyboard("food", 0, len(foods)-1),
+            reply_markup=nav_keyboard("food", 0, len(foods) - 1),
         )
 
 @dp.callback_query(lambda c: c.data.startswith("food_"))
@@ -234,7 +224,7 @@ async def food_nav(call: types.CallbackQuery, state: FSMContext):
     image = local_images[country].get(key, local_images["Сербия"]["default"])
     await call.message.edit_media(
         types.InputMediaPhoto(FSInputFile(image), caption=caption),
-        reply_markup=nav_keyboard("food", i, len(foods)-1),
+        reply_markup=nav_keyboard("food", i, len(foods) - 1),
     )
     await call.answer()
 
@@ -248,13 +238,36 @@ async def place_nav(call: types.CallbackQuery, state: FSMContext):
     image = local_images.get(country, {}).get(name) or local_images["Сербия"]["default"]
     await call.message.edit_media(
         types.InputMediaPhoto(FSInputFile(image), caption=name),
-        reply_markup=nav_keyboard("place", i, len(places)-1),
+        reply_markup=nav_keyboard("place", i, len(places) - 1),
     )
     await call.answer()
 
 # ======================================================
-# Run
+# Webhook lifecycle
 # ======================================================
+async def on_startup(bot: Bot):
+    await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
+
+async def on_shutdown(bot: Bot):
+    await bot.delete_webhook()
+
+# ======================================================
+# Run app
+# ======================================================
+def main():
+    app = web.Application()
+
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
+
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+    ).register(app, path=WEBHOOK_PATH)
+
+    setup_application(app, dp, bot=bot)
+    web.run_app(app, host="0.0.0.0", port=PORT)
+
 if __name__ == "__main__":
-    print("🚀 Bot started")
-    asyncio.run(dp.start_polling(bot))
+    print("🚀 Bot started with WEBHOOK")
+    main()
