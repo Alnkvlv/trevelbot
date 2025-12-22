@@ -27,6 +27,8 @@ PORT = int(os.getenv("PORT", 10000))
 # ======================================================
 # Images
 # ======================================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def img(name: str):
     return os.path.join(BASE_DIR, "images", name)
 
