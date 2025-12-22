@@ -352,7 +352,7 @@ def main():
     SimpleRequestHandler(
         dispatcher=dp,
         bot=bot
-    ).register(app, path=WEBHOOK_PATH, method="POST")
+    ).register(app, path=WEBHOOK_PATH)
 
     setup_application(app, dp, bot=bot)
 
