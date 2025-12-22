@@ -2,6 +2,7 @@ import os
 import asyncio
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import (
     Message, ReplyKeyboardMarkup, KeyboardButton,
@@ -12,14 +13,18 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import StatesGroup, State
 
-# ---------------------------
-# Dummy HTTP сервер для Render Free Plan
-# ---------------------------
+# ======================================================
+# Dummy HTTP server for Render Free Plan
+# ======================================================
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"OK")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
 
 def run_dummy_server():
     server = HTTPServer(("0.0.0.0", 10000), DummyHandler)
@@ -27,304 +32,229 @@ def run_dummy_server():
 
 threading.Thread(target=run_dummy_server, daemon=True).start()
 
-# ---------------------------
-# Токен из переменной окружения
-# ---------------------------
+# ======================================================
+# Token
+# ======================================================
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
-    raise ValueError("❌ Переменная окружения TOKEN не задана")
+    raise ValueError("❌ TOKEN not set")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ---------------------------
-# Базовая директория проекта
-# ---------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ---------------------------
-# Локальные изображения
-# ---------------------------
+# ======================================================
+# Images
+# ======================================================
+def img(name: str):
+    return os.path.join(BASE_DIR, "images", name)
+
 local_images = {
     "Россия": {
-        "Красная площадь": os.path.join(BASE_DIR, "images", "RedSquare.jpg"),
-        "Борщ": os.path.join(BASE_DIR, "images", "Borsh.jpg"),
-        "Пельмени": os.path.join(BASE_DIR, "images", "Pelmeni.jpg"),
-        "Блины": os.path.join(BASE_DIR, "images", "Blini.jpg")
+        "Красная площадь": img("RedSquare.jpg"),
+        "Эрмитаж": img("Hermitage.jpg"),
+        "Байкал": img("Baikal.jpg"),
+        "Борщ": img("Borsh.jpg"),
+        "Пельмени": img("Pelmeni.jpg"),
+        "Блины": img("Blini.jpg"),
     },
     "Франция": {
-        "Эйфелева башня": os.path.join(BASE_DIR, "images", "EiffelTower.jpg"),
-        "Круассаны": os.path.join(BASE_DIR, "images", "Croissant.jpg"),
-        "Багеты": os.path.join(BASE_DIR, "images", "Baguette.jpg"),
-        "Сыр": os.path.join(BASE_DIR, "images", "Cheese.jpg")
+        "Эйфелева башня": img("EiffelTower.jpg"),
+        "Лувр": img("Louvre.jpg"),
+        "Версаль": img("Versailles.jpg"),
+        "Круассаны": img("Croissant.jpg"),
+        "Багеты": img("Baguette.jpg"),
+        "Сыр": img("Cheese.jpg"),
     },
     "Япония": {
-        "Токийская башня": os.path.join(BASE_DIR, "images", "TokyoTower.jpg"),
-        "Суши": os.path.join(BASE_DIR, "images", "Sushi.jpg"),
-        "Рамен": os.path.join(BASE_DIR, "images", "Ramen.jpg"),
-        "Тэмпура": os.path.join(BASE_DIR, "images", "Tempura.jpg")
+        "Токийская башня": img("TokyoTower.jpg"),
+        "Киото": img("Kyoto.jpg"),
+        "Фудзи": img("Fuji.jpg"),
+        "Суши": img("Sushi.jpg"),
+        "Рамен": img("Ramen.jpg"),
+        "Тэмпура": img("Tempura.jpg"),
     },
     "Сербия": {
-        "cevapcici": os.path.join(BASE_DIR, "images", "Ćevapčići.jpg"),
-        "pljeskavica": os.path.join(BASE_DIR, "images", "Pljeskavica.jpg"),
-        "burek": os.path.join(BASE_DIR, "images", "Burek.jpg")
+        "cevapcici": img("Cevapcici.jpg"),
+        "pljeskavica": img("Pljeskavica.jpg"),
+        "burek": img("Burek.jpg"),
+        "default": img("Cevapcici.jpg"),
     }
 }
 
-# Подписи с эмодзи для Сербии
 serbia_food_captions = {
-    "cevapcici": "Ćevapčići 🍢 — маленькие рубленые мясные колбаски (говядина/смешанное мясо), подаются с лепёшкой (lepinja), луком и каймаком/айваром.",
-    "pljeskavica": "Pljeskavica 🍔 — большая мясная котлета/бургер по‑балкански; часто с сыром или луком.",
-    "burek": "Burek 🥐 — слойный пирог с начинкой (мясо, сыр, картофель); популярен на завтрак."
+    "cevapcici": "🍢 Ćevapčići — мясные колбаски с лепёшкой и айваром",
+    "pljeskavica": "🍔 Pljeskavica — балканский бургер",
+    "burek": "🥐 Burek — слоёный пирог с начинкой",
 }
 
-# ---------------------------
-# Данные по странам
-# ---------------------------
+# ======================================================
+# Data
+# ======================================================
 countries_info = {
     "Россия": {
-        "Важные правила и особенности": "Не забывайте о визе и правилах таможни.",
-        "Требуемые документы": "Паспорт, страховка, билеты.",
-        "Список вещей, которые стоит взять": "Тёплая одежда, удобная обувь, документы.",
+        "Важные правила и особенности": "🇷🇺 Соблюдайте визовые и таможенные правила.",
+        "Требуемые документы": "🛂 Паспорт, билеты, страховка.",
+        "Список вещей, которые стоит взять": "🧥 Тёплая одежда, документы.",
         "Популярные места для посещения": ["Красная площадь", "Эрмитаж", "Байкал"],
-        "Национальная кухня": ["Борщ", "Пельмени", "Блины"]
+        "Национальная кухня": ["Борщ", "Пельмени", "Блины"],
     },
     "Франция": {
-        "Важные правила и особенности": "Соблюдайте местные правила дорожного движения.",
-        "Требуемые документы": "Паспорт, страховка, билеты.",
-        "Список вещей, которые стоит взять": "Лёгкая одежда, адаптер для розеток, фотоаппарат.",
+        "Важные правила и особенности": "🇫🇷 Соблюдайте ПДД.",
+        "Требуемые документы": "🛂 Паспорт.",
+        "Список вещей, которые стоит взять": "📷 Камера, адаптер.",
         "Популярные места для посещения": ["Эйфелева башня", "Лувр", "Версаль"],
-        "Национальная кухня": ["Круассаны", "Багеты", "Сыр"]
+        "Национальная кухня": ["Круассаны", "Багеты", "Сыр"],
     },
     "Япония": {
-        "Важные правила и особенности": "Уважайте местные традиции и правила.",
-        "Требуемые документы": "Паспорт, виза, страховка.",
-        "Список вещей, которые стоит взять": "Удобная обувь, зонтик, карта города.",
+        "Важные правила и особенности": "🇯🇵 Уважайте традиции.",
+        "Требуемые документы": "🛂 Паспорт, виза.",
+        "Список вещей, которые стоит взять": "👟 Удобная обувь.",
         "Популярные места для посещения": ["Токийская башня", "Киото", "Фудзи"],
-        "Национальная кухня": ["Суши", "Рамен", "Тэмпура"]
+        "Национальная кухня": ["Суши", "Рамен", "Тэмпура"],
     },
     "Сербия": {
-        "Важные правила и особенности": (
-        "🗣 Язык официальный — сербский (кириллица и латиница). В туристических местах часто говорят по‑английски.\n"
-        "💰 Валюта сербский динар (RSD). Кредитные карты принимают в городах, но в маленьких поселениях и на рынках чаще берут только наличные.\n"
-        "⛪ Религия православие широко представлено — уважайте монастыри и церкви.\n"
-        "🔒 В целом безопасно, но возможны карманные кражи.\n"
-        "📸 Спрашивайте разрешение перед фотографированием людей; не фотографируйте охраняемые объекты.\n"
-        "🚭 Курение в закрытых помещениях ограничено.\n"
-        "🍷 Алкоголь: молодежные развлечения развиты, но публичное опьянение не приветствуется.\n"
-        "❌ Наркотики запрещены; ограничения на провоз товаров и наличные.\n"
-        "🚗 Движение правостороннее. Международные права не обязательны для EU, но рекомендуется IDP.\n"
-        "🌟 Интересные факты: столетние монастыри, традиционная кухня Балкан, Белград — культурный и ночной центр."
-    ),
-        "Требуемые документы": (
-        "🛂 Паспорт — действителен на период поездки, желательно 3 месяца до окончания срока.\n"
-        "🛃 Виза — для многих стран разрешено безвизовое пребывание 30–90 дней.\n"
-        "✈️ Билеты туда/обратно.\n"
-        "🏨 Подтверждение брони жилья.\n"
-        "🏥 Медицинская страховка.\n"
-        "🚘 Водительские права (национальные, рекомендуются IDP).\n"
-        "💉 Прививочный сертификат при необходимости.\n"
-        "🗂 Копии документов в облаке и бумажные."
-    ),
-        "Список вещей, которые стоит взять": (
-        "🧥 Тёплая одежда, многослойная.\n"
-        "👟 Удобная обувь.\n"
-        "🌧 Лёгкая куртка/дождевик.\n"
-        "🔌 Зарядные устройства, power bank, переходник.\n"
-        "💊 Аптечка: лекарства, обезболивающее, пластыри.\n"
-        "💵 Наличные и карты.\n"
-        "🕶 Солнцезащитные очки и крем.\n"
-        "🚰 Рюкзак на день, вода.\n"
-        "🔒 Универсальный замок и сумка на ремне.\n"
-        "⛷ Специализированная одежда для гор/зимы.\n"
-        "📷 Фотокамера/смартфон с офлайн картами."
-    ),
+        "Важные правила и особенности": "🇷🇸 Сербия безопасна и гостеприимна.",
+        "Требуемые документы": "🛂 Паспорт, страховка.",
+        "Список вещей, которые стоит взять": "🎒 Удобная одежда.",
         "Популярные места для посещения": [
-            "Калемегданская крепость — вид на слияние Савы и Дуная, музеи и парк.",
-            "Скадарлия — старый богемный квартал с ресторанами и живой музыкой.",
-            "Национальный парк Тара и Златибор."
+            "Калемегданская крепость",
+            "Скадарлия",
+            "Златибор",
         ],
-        "Национальная кухня": ["cevapcici", "pljeskavica", "burek"]
-    }
+        "Национальная кухня": ["cevapcici", "pljeskavica", "burek"],
+    },
 }
 
-# ---------------------------
+# ======================================================
 # FSM
-# ---------------------------
+# ======================================================
 class Form(StatesGroup):
     country = State()
     section = State()
     food_index = State()
     place_index = State()
-    checklist = State()
 
-# ---------------------------
-# Клавиатуры
-# ---------------------------
+# ======================================================
+# Keyboards
+# ======================================================
 def country_keyboard():
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=country)] for country in countries_info],
-        resize_keyboard=True
+        keyboard=[[KeyboardButton(text=c)] for c in countries_info],
+        resize_keyboard=True,
     )
 
-def country_sections_keyboard():
+def section_keyboard():
     sections = [
         "Важные правила и особенности",
         "Требуемые документы",
         "Список вещей, которые стоит взять",
         "Популярные места для посещения",
         "Национальная кухня",
-        "Чек-лист для путешественника",
-        "Назад"
+        "Назад",
     ]
-    keyboard = [sections[i:i + 3] for i in range(0, len(sections), 3)]
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=s) for s in row] for row in keyboard],
-        resize_keyboard=True
+        keyboard=[[KeyboardButton(text=s)] for s in sections],
+        resize_keyboard=True,
     )
 
-def food_carousel_keyboard(index, max_index):
+def nav_keyboard(prefix, index, max_i):
     buttons = []
     if index > 0:
-        buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"food_nav_{index - 1}"))
-    if index < max_index:
-        buttons.append(InlineKeyboardButton(text="➡️ Далее", callback_data=f"food_nav_{index + 1}"))
+        buttons.append(InlineKeyboardButton("⬅️", callback_data=f"{prefix}_{index-1}"))
+    if index < max_i:
+        buttons.append(InlineKeyboardButton("➡️", callback_data=f"{prefix}_{index+1}"))
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
-def places_carousel_keyboard(index, max_index):
-    buttons = []
-    if index > 0:
-        buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"places_nav_{index - 1}"))
-    if index < max_index:
-        buttons.append(InlineKeyboardButton(text="➡️ Далее", callback_data=f"places_nav_{index + 1}"))
-    return InlineKeyboardMarkup(inline_keyboard=[buttons])
-
-def checklist_keyboard(items, checked):
-    buttons = []
-    for i, item in enumerate(items):
-        text = f"✅ {item}" if checked[i] else item
-        buttons.append([InlineKeyboardButton(text=text, callback_data=f"check_{i}")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-# ---------------------------
-# Хендлеры
-# ---------------------------
+# ======================================================
+# Handlers
+# ======================================================
 @dp.message(Command("start"))
-async def start_handler(message: Message, state: FSMContext):
+async def start(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Form.country)
-    await message.answer("Выберите страну:", reply_markup=country_keyboard())
+    await message.answer("🌍 Выберите страну:", reply_markup=country_keyboard())
 
 @dp.message(Form.country)
-async def country_selected(message: Message, state: FSMContext):
-    if message.text in countries_info:
-        await state.update_data(country=message.text)
-        await state.set_state(Form.section)
-        await message.answer(
-            f"Вы выбрали {message.text}. Выберите раздел:",
-            reply_markup=country_sections_keyboard()
-        )
-    else:
-        await message.answer("Пожалуйста, выберите страну из списка.")
+async def choose_country(message: Message, state: FSMContext):
+    if message.text not in countries_info:
+        return await message.answer("Выберите страну кнопкой 👇")
+    await state.update_data(country=message.text)
+    await state.set_state(Form.section)
+    await message.answer(
+        f"📌 {message.text}. Выберите раздел:",
+        reply_markup=section_keyboard(),
+    )
 
 @dp.message(Form.section)
-async def section_selected(message: Message, state: FSMContext):
+async def choose_section(message: Message, state: FSMContext):
     data = await state.get_data()
     country = data["country"]
     section = message.text
 
     if section == "Назад":
         await state.set_state(Form.country)
-        await message.answer("Выберите страну:", reply_markup=country_keyboard())
-        return
+        return await message.answer("🌍 Выберите страну:", reply_markup=country_keyboard())
+
+    if section in ["Важные правила и особенности", "Требуемые документы", "Список вещей, которые стоит взять"]:
+        return await message.answer(countries_info[country][section])
 
     if section == "Популярные места для посещения":
         places = countries_info[country][section]
         await state.update_data(place_index=0)
         name = places[0]
+        image = local_images.get(country, {}).get(name) or local_images["Сербия"]["default"]
         await message.answer_photo(
-            FSInputFile(local_images[country][name]) if country != "Сербия" else FSInputFile(local_images[country]["cevapcici"]),
+            FSInputFile(image),
             caption=name,
-            reply_markup=places_carousel_keyboard(0, len(places) - 1)
+            reply_markup=nav_keyboard("place", 0, len(places)-1),
         )
-        return
 
     if section == "Национальная кухня":
         foods = countries_info[country][section]
         await state.update_data(food_index=0)
-        food_key = foods[0]
-        caption = serbia_food_captions[food_key] if country == "Сербия" else food_key
+        key = foods[0]
+        caption = serbia_food_captions.get(key, key)
+        image = local_images[country].get(key, local_images["Сербия"]["default"])
         await message.answer_photo(
-            FSInputFile(local_images[country][food_key]) if country == "Сербия" else FSInputFile(local_images[country][food_key]),
+            FSInputFile(image),
             caption=caption,
-            reply_markup=food_carousel_keyboard(0, len(foods) - 1)
+            reply_markup=nav_keyboard("food", 0, len(foods)-1),
         )
-        return
 
-    if section == "Чек-лист для путешественника":
-        checklist = ["Паспорт", "Билеты", "Страховка", "Удобная обувь", "Фотоаппарат"]
-        checked = [False] * len(checklist)
-        await state.update_data(checklist_items=checklist, checklist_checked=checked)
-        await message.answer("Ваш чек-лист:", reply_markup=checklist_keyboard(checklist, checked))
-        return
-
-    await message.answer(countries_info[country].get(section, "Раздел не найден"))
-
-# ---------------------------
-# Карусели
-# ---------------------------
-@dp.callback_query(lambda c: c.data.startswith("food_nav_"))
-async def food_nav(callback: types.CallbackQuery, state: FSMContext):
-    index = int(callback.data.split("_")[-1])
+@dp.callback_query(lambda c: c.data.startswith("food_"))
+async def food_nav(call: types.CallbackQuery, state: FSMContext):
+    i = int(call.data.split("_")[1])
     data = await state.get_data()
     country = data["country"]
     foods = countries_info[country]["Национальная кухня"]
-    food_key = foods[index]
-    caption = serbia_food_captions[food_key] if country == "Сербия" else food_key
-    await callback.message.edit_media(
-        media=types.InputMediaPhoto(
-            media=FSInputFile(local_images[country][food_key]),
-            caption=caption
-        ),
-        reply_markup=food_carousel_keyboard(index, len(foods) - 1)
+    key = foods[i]
+    caption = serbia_food_captions.get(key, key)
+    image = local_images[country].get(key, local_images["Сербия"]["default"])
+    await call.message.edit_media(
+        types.InputMediaPhoto(FSInputFile(image), caption=caption),
+        reply_markup=nav_keyboard("food", i, len(foods)-1),
     )
-    await callback.answer()
+    await call.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("places_nav_"))
-async def places_nav(callback: types.CallbackQuery, state: FSMContext):
-    index = int(callback.data.split("_")[-1])
+@dp.callback_query(lambda c: c.data.startswith("place_"))
+async def place_nav(call: types.CallbackQuery, state: FSMContext):
+    i = int(call.data.split("_")[1])
     data = await state.get_data()
     country = data["country"]
     places = countries_info[country]["Популярные места для посещения"]
-    name = places[index]
-    await callback.message.edit_media(
-        media=types.InputMediaPhoto(
-            media=FSInputFile(local_images[country][name]) if country != "Сербия" else FSInputFile(local_images[country]["cevapcici"]),
-            caption=name
-        ),
-        reply_markup=places_carousel_keyboard(index, len(places) - 1)
+    name = places[i]
+    image = local_images.get(country, {}).get(name) or local_images["Сербия"]["default"]
+    await call.message.edit_media(
+        types.InputMediaPhoto(FSInputFile(image), caption=name),
+        reply_markup=nav_keyboard("place", i, len(places)-1),
     )
-    await callback.answer()
+    await call.answer()
 
-# ---------------------------
-# Чек-лист
-# ---------------------------
-@dp.callback_query(lambda c: c.data.startswith("check_"))
-async def checklist_toggle(callback: types.CallbackQuery, state: FSMContext):
-    index = int(callback.data.split("_")[1])
-    data = await state.get_data()
-    items = data["checklist_items"]
-    checked = data["checklist_checked"]
-    checked[index] = not checked[index]
-    await state.update_data(checklist_checked=checked)
-    await callback.message.edit_reply_markup(
-        reply_markup=checklist_keyboard(items, checked)
-    )
-    await callback.answer()
-
-# ---------------------------
-# Запуск
-# ---------------------------
-@dp.message(Command("start"))
-async def start(message: types.Message):
-    await message.answer("Бот работает ✅")
+# ======================================================
+# Run
+# ======================================================
+if __name__ == "__main__":
+    print("🚀 Bot started")
+    asyncio.run(dp.start_polling(bot))
