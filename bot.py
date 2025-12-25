@@ -36,10 +36,8 @@ PORT = int(os.getenv("PORT", 10000))
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
 def img(name: str):
     return os.path.join(BASE_DIR, "images", name)
-
 
 # ==============================
 # Local images
@@ -122,42 +120,24 @@ def country_keyboard():
         resize_keyboard=True
     )
 
-
 def section_keyboard():
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=s)]
-            for s in [
-                "Важные правила и особенности",
-                "Требуемые документы",
-                "Список вещей, которые стоит взять",
-                "Популярные места для посещения",
-                "Национальная кухня",
-            ]
-        ] + [[KeyboardButton(text="⬅ Назад")]],
+        keyboard=[ [KeyboardButton(text=s)] for s in [
+            "Важные правила и особенности",
+            "Требуемые документы",
+            "Список вещей, которые стоит взять",
+            "Популярные места для посещения",
+            "Национальная кухня"
+        ]] + [[KeyboardButton(text="⬅ Назад")]],
         resize_keyboard=True
     )
 
-
 def nav_keyboard(index: int, max_i: int):
     buttons = []
-
     if index > 0:
-        buttons.append(
-            InlineKeyboardButton(
-                text="⬅️",
-                callback_data=f"nav:{index-1}"
-            )
-        )
-
+        buttons.append(InlineKeyboardButton(text="⬅️", callback_data=f"nav:{index-1}"))
     if index < max_i - 1:
-        buttons.append(
-            InlineKeyboardButton(
-                text="➡️",
-                callback_data=f"nav:{index+1}"
-            )
-        )
-
+        buttons.append(InlineKeyboardButton(text="➡️", callback_data=f"nav:{index+1}"))
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
 # ==============================
@@ -215,6 +195,12 @@ countries_info = {
     },
 }
 
+text_sections = [
+    "Важные правила и особенности",
+    "Требуемые документы",
+    "Список вещей, которые стоит взять"
+]
+
 # ==============================
 # Handlers
 # ==============================
@@ -230,7 +216,6 @@ async def choose_country(message: Message, state: FSMContext):
     if message.text not in countries_info:
         await message.answer("❌ Выберите страну кнопкой")
         return
-
     await state.update_data(country=message.text)
     await state.set_state(Form.section)
     await message.answer("📂 Выберите раздел:", reply_markup=section_keyboard())
@@ -251,20 +236,27 @@ async def choose_section(message: Message, state: FSMContext):
         await message.answer("❌ Раздел недоступен")
         return
 
-    items = [i.strip() for i in countries_info[country][section].split(",")]
+    # ----------------------------
+    # Текстовые разделы
+    # ----------------------------
+    if section in text_sections:
+        await message.answer(countries_info[country][section], reply_markup=section_keyboard())
+        return
 
-    await state.update_data(
-        carousel_items=items,
-        carousel_country=country
-    )
+    # ----------------------------
+    # Фото-карусель
+    # ----------------------------
+    items = [i.strip() for i in countries_info[country][section].split(",")]
+    await state.update_data(carousel_items=items, carousel_country=country)
 
     index = 0
     item = items[index]
-    path = local_images.get(country, {}).get(item) or img("default.jpg")
+    path = local_images.get(country, {}).get(item) or img("default.png")
+    caption = serbia_food_captions.get(item, f"{item} ({index+1}/{len(items)})")
 
     await message.answer_photo(
         photo=FSInputFile(path),
-        caption=f"{item} (1/{len(items)})",
+        caption=caption,
         reply_markup=nav_keyboard(index, len(items))
     )
 
@@ -273,17 +265,17 @@ async def choose_section(message: Message, state: FSMContext):
 async def carousel_callback(call: CallbackQuery, state: FSMContext):
     index = int(call.data.split(":")[1])
     data = await state.get_data()
-
     items = data["carousel_items"]
     country = data["carousel_country"]
 
     item = items[index]
-    path = local_images.get(country, {}).get(item) or img("default.jpg")
-
-    media = InputMediaPhoto(media=FSInputFile(path), caption=f"{item} ({index+1}/{len(items)})")
+    path = local_images.get(country, {}).get(item) or img("default.png")
+    caption = serbia_food_captions.get(item, f"{item} ({index+1}/{len(items)})")
+    media = InputMediaPhoto(media=FSInputFile(path), caption=caption)
 
     await call.message.edit_media(media=media, reply_markup=nav_keyboard(index, len(items)))
     await call.answer()
+
 
 # ==============================
 # Webhook lifecycle
@@ -295,22 +287,16 @@ async def on_startup(bot: Bot):
 async def on_shutdown(bot: Bot):
     await bot.delete_webhook()
 
+
 # ==============================
 # Run
 # ==============================
 def main():
     app = web.Application()
-
-    SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot
-    ).register(app, path=WEBHOOK_PATH)
-
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
-
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
-
     web.run_app(app, host="0.0.0.0", port=PORT)
 
 
