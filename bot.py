@@ -236,6 +236,34 @@ async def choose_section(message: Message, state: FSMContext):
         await message.answer("❌ Раздел недоступен")
         return
 
+    items = [i.strip() for i in countries_info[country][section].split(",")]
+
+    await state.update_data(
+        carousel_items=items,
+        carousel_country=country
+    )
+
+    index = 0
+    item = items[index]
+
+    # получаем путь к изображению
+    path = local_images.get(country, {}).get(item)
+    if path is None or not os.path.exists(path):
+        print(f"⚠️ Image not found: {item}, trying default.jpg")
+        path = img("default.jpg")
+
+        if not os.path.exists(path):
+            print(f"❌ Default image also not found at {path}")
+            await message.answer(f"{item} (1/{len(items)})")
+            return
+
+    print(f"✅ Sending image: {path}")
+    await message.answer_photo(
+        photo=FSInputFile(path),
+        caption=f"{item} (1/{len(items)})",
+        reply_markup=nav_keyboard(index, len(items))
+    )
+
     # ----------------------------
     # Текстовые разделы
     # ----------------------------
