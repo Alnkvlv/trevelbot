@@ -8,8 +8,7 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    CallbackQuery,
-    InputMediaPhoto,
+    CallbackQuery
 )
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -36,8 +35,10 @@ PORT = int(os.getenv("PORT", 10000))
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
 def img(name: str):
     return os.path.join(BASE_DIR, "images", name)
+
 
 # ==============================
 # Local images
@@ -111,6 +112,7 @@ class Form(StatesGroup):
     country = State()
     section = State()
 
+
 # ==============================
 # Keyboards
 # ==============================
@@ -120,17 +122,20 @@ def country_keyboard():
         resize_keyboard=True
     )
 
+
 def section_keyboard():
+    sections = [
+        "Важные правила и особенности",
+        "Требуемые документы",
+        "Список вещей, которые стоит взять",
+        "Популярные места для посещения",
+        "Национальная кухня",
+    ]
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Важные правила и особенности")],
-            [KeyboardButton(text="Требуемые документы")],
-            [KeyboardButton(text="Список вещей, которые стоит взять")],
-            [KeyboardButton(text="Популярные места для посещения")],
-            [KeyboardButton(text="Национальная кухня")],
-        ],
+        keyboard=[[KeyboardButton(text=s)] for s in sections],
         resize_keyboard=True
     )
+
 
 def back_keyboard():
     return ReplyKeyboardMarkup(
@@ -138,28 +143,22 @@ def back_keyboard():
         resize_keyboard=True
     )
 
-# ==============================
-# Carousel navigation (FIXED)
-# ==============================
-def nav_keyboard(prefix: str, index: int, max_i: int):
-    buttons = []
 
+# ==============================
+# Carousel navigation (SAFE)
+# ==============================
+def nav_keyboard(index: int, max_i: int):
+    buttons = []
     if index > 0:
         buttons.append(
-            InlineKeyboardButton(
-                text="⬅️",
-                callback_data=f"{prefix}:{index-1}"
-            )
+            InlineKeyboardButton("⬅️", callback_data=f"nav:{index-1}")
         )
     if index < max_i - 1:
         buttons.append(
-            InlineKeyboardButton(
-                text="➡️",
-                callback_data=f"{prefix}:{index+1}"
-            )
+            InlineKeyboardButton("➡️", callback_data=f"nav:{index+1}")
         )
-
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
+
 
 # ==============================
 # DATA
@@ -220,16 +219,22 @@ countries_info = {
 # Handlers
 # ==============================
 @dp.message(Command("start"))
-async def start(message: Message, state: FSMContext):
+async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Form.country)
     await message.answer("🌍 Выберите страну:", reply_markup=country_keyboard())
 
+
 @dp.message(Form.country)
 async def choose_country(message: Message, state: FSMContext):
+    if message.text not in countries_info:
+        await message.answer("❌ Выберите страну кнопкой")
+        return
+
     await state.update_data(country=message.text)
     await state.set_state(Form.section)
     await message.answer("📂 Выберите раздел:", reply_markup=section_keyboard())
+
 
 @dp.message(Form.section)
 async def choose_section(message: Message, state: FSMContext):
@@ -241,42 +246,60 @@ async def choose_section(message: Message, state: FSMContext):
     country = data["country"]
     section = message.text
 
-    info = countries_info[country][section]
-
-    if section not in ["Популярные места для посещения", "Национальная кухня"]:
-        await message.answer(info, reply_markup=back_keyboard())
+    if section not in countries_info[country]:
+        await message.answer("❌ Нет данных", reply_markup=back_keyboard())
         return
 
-    items = [i.strip() for i in info.split(",")]
+    items = [i.strip() for i in countries_info[country][section].split(",")]
+
+    await state.update_data(
+        carousel_items=items,
+        carousel_country=country
+    )
+
     first = items[0]
     path = local_images[country].get(first)
 
+    caption = serbia_food_captions.get(
+        first,
+        f"{first} ➡️ 1/{len(items)}"
+    )
+
     await message.answer_photo(
-        FSInputFile(path),
-        caption=f"{first} 1/{len(items)}",
-        reply_markup=nav_keyboard(f"{country}|{section}", 0, len(items))
+        photo=FSInputFile(path),
+        caption=caption,
+        reply_markup=nav_keyboard(0, len(items))
     )
 
-@dp.callback_query()
-async def carousel_callback(call: CallbackQuery):
-    prefix, index = call.data.split(":")
-    index = int(index)
-    country, section = prefix.split("|")
 
-    items = [i.strip() for i in countries_info[country][section].split(",")]
+# ==============================
+# Callback handler (SAFE)
+# ==============================
+@dp.callback_query(lambda c: c.data.startswith("nav:"))
+async def carousel_callback(call: CallbackQuery, state: FSMContext):
+    index = int(call.data.split(":")[1])
+
+    data = await state.get_data()
+    items = data["carousel_items"]
+    country = data["carousel_country"]
+
     item = items[index]
-    path = local_images[country][item]
+    path = local_images[country].get(item)
 
-    media = InputMediaPhoto(
-        media=FSInputFile(path),
-        caption=serbia_food_captions.get(item, f"{item} {index+1}/{len(items)}")
+    caption = serbia_food_captions.get(
+        item,
+        f"{item} ➡️ {index+1}/{len(items)}"
     )
 
-    await call.message.edit_media(media=media)
+    await call.message.edit_media(
+        media=FSInputFile(path),
+        caption=caption
+    )
     await call.message.edit_reply_markup(
-        reply_markup=nav_keyboard(prefix, index, len(items))
+        reply_markup=nav_keyboard(index, len(items))
     )
     await call.answer()
+
 
 # ==============================
 # Webhook lifecycle
@@ -284,19 +307,30 @@ async def carousel_callback(call: CallbackQuery):
 async def on_startup(bot: Bot):
     await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
 
+
 async def on_shutdown(bot: Bot):
     await bot.delete_webhook()
 
+
+# ==============================
+# Run server
+# ==============================
 def main():
     app = web.Application()
 
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, WEBHOOK_PATH)
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot
+    ).register(app, path=WEBHOOK_PATH)
+
     setup_application(app, dp, bot=bot)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 
+    print(f"🚀 Bot is running at {WEBHOOK_URL}")
     web.run_app(app, host="0.0.0.0", port=PORT)
+
 
 if __name__ == "__main__":
     main()
