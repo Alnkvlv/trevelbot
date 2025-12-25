@@ -40,17 +40,16 @@ def img(name: str):
     return os.path.join(BASE_DIR, "images", name)
 
 # ==============================
-# 🔥 NEW: text splitter
+# TEXT SPLITTER
 # ==============================
 async def send_long_text(message: Message, text: str, reply_markup=None):
     MAX_LEN = 4000
-    parts = [text[i:i + MAX_LEN] for i in range(0, len(text), MAX_LEN)]
-
-    for i, part in enumerate(parts):
+    for i in range(0, len(text), MAX_LEN):
         await message.answer(
-            part,
-            reply_markup=reply_markup if i == len(parts) - 1 else None
+            text[i:i + MAX_LEN],
+            reply_markup=reply_markup if i + MAX_LEN >= len(text) else None
         )
+
 
 # ==============================
 # Local images
@@ -132,13 +131,13 @@ class Form(StatesGroup):
 # ==============================
 def country_keyboard():
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=c)] for c in local_images.keys()],
+        keyboard=[[KeyboardButton(text=c)] for c in countries_info.keys()],
         resize_keyboard=True
     )
 
 def section_keyboard():
     return ReplyKeyboardMarkup(
-        keyboard=[ [KeyboardButton(text=s)] for s in [
+        keyboard=[[KeyboardButton(text=s)] for s in [
             "Важные правила и особенности",
             "Требуемые документы",
             "Список вещей, которые стоит взять",
@@ -151,9 +150,9 @@ def section_keyboard():
 def nav_keyboard(index: int, max_i: int):
     buttons = []
     if index > 0:
-        buttons.append(InlineKeyboardButton(text="⬅️", callback_data=f"nav:{index-1}"))
+        buttons.append(InlineKeyboardButton("⬅️", callback_data=f"nav:{index-1}"))
     if index < max_i - 1:
-        buttons.append(InlineKeyboardButton(text="➡️", callback_data=f"nav:{index+1}"))
+        buttons.append(InlineKeyboardButton("➡️", callback_data=f"nav:{index+1}"))
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
 # ==============================
@@ -317,6 +316,7 @@ async def choose_country(message: Message, state: FSMContext):
     if message.text not in countries_info:
         await message.answer("❌ Выберите страну кнопкой")
         return
+
     await state.update_data(country=message.text)
     await state.set_state(Form.section)
     await message.answer("📂 Выберите раздел:", reply_markup=section_keyboard())
@@ -333,45 +333,49 @@ async def choose_section(message: Message, state: FSMContext):
     country = data["country"]
     section = message.text
 
-    # 🔥 TEXT SECTIONS FIX
-    if section in text_sections:
-        text = countries_info[country][section]
-        await send_long_text(message, text, reply_markup=section_keyboard())
+    value = countries_info[country][section]
+
+    # ---------- TEXT ----------
+    if isinstance(value, str):
+        await send_long_text(message, value, reply_markup=section_keyboard())
         return
 
-    # ----------------------------
-    # Фото-карусель
-    # ----------------------------
-    items = [i.strip() for i in countries_info[country][section].split(",")]
-    await state.update_data(carousel_items=items, carousel_country=country)
+    # ---------- CAROUSEL ----------
+    if isinstance(value, list):
+        await state.update_data(
+            carousel_items=value,
+            carousel_country=country
+        )
 
-    index = 0
-    item = items[index]
-    path = local_images.get(country, {}).get(item) or img("default.jpg")
-    caption = serbia_food_captions.get(item, f"{item} ({index+1}/{len(items)})")
+        index = 0
+        item = value[index]
+        path = local_images.get(country, {}).get(item) or img("default.jpg")
 
-    await message.answer_photo(
-        photo=FSInputFile(path),
-        caption=caption,
-        reply_markup=nav_keyboard(index, len(items))
-    )
-
+        await message.answer_photo(
+            photo=FSInputFile(path),
+            caption=f"{item} (1/{len(value)})",
+            reply_markup=nav_keyboard(index, len(value))
+        )
 
 @dp.callback_query(lambda c: c.data.startswith("nav:"))
 async def carousel_callback(call: CallbackQuery, state: FSMContext):
     index = int(call.data.split(":")[1])
     data = await state.get_data()
+
     items = data["carousel_items"]
     country = data["carousel_country"]
-
     item = items[index]
+
     path = local_images.get(country, {}).get(item) or img("default.jpg")
-    caption = serbia_food_captions.get(item, f"{item} ({index+1}/{len(items)})")
-    media = InputMediaPhoto(media=FSInputFile(path), caption=caption)
 
-    await call.message.edit_media(media=media, reply_markup=nav_keyboard(index, len(items)))
+    await call.message.edit_media(
+        InputMediaPhoto(
+            media=FSInputFile(path),
+            caption=f"{item} ({index+1}/{len(items)})"
+        ),
+        reply_markup=nav_keyboard(index, len(items))
+    )
     await call.answer()
-
 
 # ==============================
 # Webhook lifecycle
@@ -379,14 +383,9 @@ async def carousel_callback(call: CallbackQuery, state: FSMContext):
 async def on_startup(bot: Bot):
     await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
 
-
 async def on_shutdown(bot: Bot):
     await bot.delete_webhook()
 
-
-# ==============================
-# Run
-# ==============================
 def main():
     app = web.Application()
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
@@ -394,7 +393,6 @@ def main():
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
     web.run_app(app, host="0.0.0.0", port=PORT)
-
 
 if __name__ == "__main__":
     main()
