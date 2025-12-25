@@ -149,16 +149,24 @@ def back_keyboard():
 # ==============================
 def nav_keyboard(index: int, max_i: int):
     buttons = []
+
     if index > 0:
         buttons.append(
-            InlineKeyboardButton("⬅️", callback_data=f"nav:{index-1}")
+            InlineKeyboardButton(
+                text="⬅️",
+                callback_data=f"nav:{index-1}"
+            )
         )
+
     if index < max_i - 1:
         buttons.append(
-            InlineKeyboardButton("➡️", callback_data=f"nav:{index+1}")
+            InlineKeyboardButton(
+                text="➡️",
+                callback_data=f"nav:{index+1}"
+            )
         )
-    return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
+    return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
 # ==============================
 # DATA
@@ -239,38 +247,44 @@ async def choose_country(message: Message, state: FSMContext):
 @dp.message(Form.section)
 async def choose_section(message: Message, state: FSMContext):
     if message.text == "⬅ Назад":
-        await message.answer("📂 Выберите раздел:", reply_markup=section_keyboard())
+        await state.set_state(Form.country)
+        await message.answer(
+            "🌍 Выберите страну:",
+            reply_markup=country_keyboard()
+        )
         return
 
     data = await state.get_data()
     country = data["country"]
     section = message.text
 
-    if section not in countries_info[country]:
-        await message.answer("❌ Нет данных", reply_markup=back_keyboard())
-        return
-
-    items = [i.strip() for i in countries_info[country][section].split(",")]
+    items = [
+        i.strip()
+        for i in countries_info[country][section].split(",")
+    ]
 
     await state.update_data(
         carousel_items=items,
         carousel_country=country
     )
 
-    first = items[0]
-    path = local_images[country].get(first)
+    index = 0
+    first = items[index]
+
+    path = local_images.get(country, {}).get(first)
+    if not path:
+        path = "images/default.jpg"
 
     caption = serbia_food_captions.get(
         first,
-        f"{first} ➡️ 1/{len(items)}"
+        f"{first} ({index+1}/{len(items)})"
     )
 
     await message.answer_photo(
         photo=FSInputFile(path),
         caption=caption,
-        reply_markup=nav_keyboard(0, len(items))
+        reply_markup=nav_keyboard(index, len(items))
     )
-
 
 # ==============================
 # Callback handler (SAFE)
