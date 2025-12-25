@@ -8,7 +8,8 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    CallbackQuery
+    CallbackQuery,
+    InputMediaPhoto
 )
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -112,7 +113,6 @@ class Form(StatesGroup):
     country = State()
     section = State()
 
-
 # ==============================
 # Keyboards
 # ==============================
@@ -124,29 +124,21 @@ def country_keyboard():
 
 
 def section_keyboard():
-    sections = [
-        "Важные правила и особенности",
-        "Требуемые документы",
-        "Список вещей, которые стоит взять",
-        "Популярные места для посещения",
-        "Национальная кухня",
-    ]
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=s)] for s in sections],
+        keyboard=[
+            [KeyboardButton(text=s)]
+            for s in [
+                "Важные правила и особенности",
+                "Требуемые документы",
+                "Список вещей, которые стоит взять",
+                "Популярные места для посещения",
+                "Национальная кухня",
+            ]
+        ] + [[KeyboardButton(text="⬅ Назад")]],
         resize_keyboard=True
     )
 
 
-def back_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="⬅ Назад")]],
-        resize_keyboard=True
-    )
-
-
-# ==============================
-# Carousel navigation (SAFE)
-# ==============================
 def nav_keyboard(index: int, max_i: int):
     buttons = []
 
@@ -227,7 +219,7 @@ countries_info = {
 # Handlers
 # ==============================
 @dp.message(Command("start"))
-async def cmd_start(message: Message, state: FSMContext):
+async def start(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Form.country)
     await message.answer("🌍 Выберите страну:", reply_markup=country_keyboard())
@@ -248,20 +240,18 @@ async def choose_country(message: Message, state: FSMContext):
 async def choose_section(message: Message, state: FSMContext):
     if message.text == "⬅ Назад":
         await state.set_state(Form.country)
-        await message.answer(
-            "🌍 Выберите страну:",
-            reply_markup=country_keyboard()
-        )
+        await message.answer("🌍 Выберите страну:", reply_markup=country_keyboard())
         return
 
     data = await state.get_data()
     country = data["country"]
     section = message.text
 
-    items = [
-        i.strip()
-        for i in countries_info[country][section].split(",")
-    ]
+    if section not in countries_info[country]:
+        await message.answer("❌ Раздел недоступен")
+        return
+
+    items = [i.strip() for i in countries_info[country][section].split(",")]
 
     await state.update_data(
         carousel_items=items,
@@ -269,51 +259,36 @@ async def choose_section(message: Message, state: FSMContext):
     )
 
     index = 0
-    first = items[index]
-
-    path = local_images.get(country, {}).get(first)
-    if not path:
-        path = "images/default.jpg"
-
-    caption = serbia_food_captions.get(
-        first,
-        f"{first} ({index+1}/{len(items)})"
-    )
+    item = items[index]
+    path = local_images.get(country, {}).get(item) or img("default.jpg")
 
     await message.answer_photo(
         photo=FSInputFile(path),
-        caption=caption,
+        caption=f"{item} (1/{len(items)})",
         reply_markup=nav_keyboard(index, len(items))
     )
 
-# ==============================
-# Callback handler (SAFE)
-# ==============================
+
 @dp.callback_query(lambda c: c.data.startswith("nav:"))
 async def carousel_callback(call: CallbackQuery, state: FSMContext):
     index = int(call.data.split(":")[1])
-
     data = await state.get_data()
+
     items = data["carousel_items"]
     country = data["carousel_country"]
 
     item = items[index]
-    path = local_images[country].get(item)
-
-    caption = serbia_food_captions.get(
-        item,
-        f"{item} ➡️ {index+1}/{len(items)}"
-    )
+    path = local_images.get(country, {}).get(item) or img("default.jpg")
 
     await call.message.edit_media(
-        media=FSInputFile(path),
-        caption=caption
-    )
-    await call.message.edit_reply_markup(
+        media=InputMediaPhoto(
+            media=FSInputFile(path),
+            caption=f"{item} ({index+1}/{len(items)})"
+        ),
         reply_markup=nav_keyboard(index, len(items))
     )
-    await call.answer()
 
+    await call.answer()
 
 # ==============================
 # Webhook lifecycle
@@ -325,9 +300,8 @@ async def on_startup(bot: Bot):
 async def on_shutdown(bot: Bot):
     await bot.delete_webhook()
 
-
 # ==============================
-# Run server
+# Run
 # ==============================
 def main():
     app = web.Application()
@@ -342,7 +316,6 @@ def main():
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 
-    print(f"🚀 Bot is running at {WEBHOOK_URL}")
     web.run_app(app, host="0.0.0.0", port=PORT)
 
 
