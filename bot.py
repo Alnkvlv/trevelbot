@@ -149,10 +149,23 @@ def section_keyboard():
 
 def nav_keyboard(index: int, max_i: int):
     buttons = []
+
     if index > 0:
-        buttons.append(InlineKeyboardButton("⬅️", callback_data=f"nav:{index-1}"))
+        buttons.append(
+            InlineKeyboardButton(
+                text="⬅️",
+                callback_data=f"nav:{index-1}"
+            )
+        )
+
     if index < max_i - 1:
-        buttons.append(InlineKeyboardButton("➡️", callback_data=f"nav:{index+1}"))
+        buttons.append(
+            InlineKeyboardButton(
+                text="➡️",
+                callback_data=f"nav:{index+1}"
+            )
+        )
+
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
 # ==============================
