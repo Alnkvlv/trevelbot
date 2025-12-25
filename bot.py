@@ -280,14 +280,9 @@ async def carousel_callback(call: CallbackQuery, state: FSMContext):
     item = items[index]
     path = local_images.get(country, {}).get(item) or img("default.jpg")
 
-    await call.message.edit_media(
-        media=InputMediaPhoto(
-            media=FSInputFile(path),
-            caption=f"{item} ({index+1}/{len(items)})"
-        ),
-        reply_markup=nav_keyboard(index, len(items))
-    )
+    media = InputMediaPhoto(media=FSInputFile(path), caption=f"{item} ({index+1}/{len(items)})")
 
+    await call.message.edit_media(media=media, reply_markup=nav_keyboard(index, len(items)))
     await call.answer()
 
 # ==============================
