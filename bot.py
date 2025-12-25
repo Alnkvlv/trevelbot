@@ -60,7 +60,7 @@ local_images = {
         "Сыр": img("Сыр.jpg"),
     },
     "Япония": {
-        "Токийская башня": img("TokyoTower.jpg"),
+        "Токийская башня": img("TokyoTower.JPG"),
         "Киото": img("Kyoto.jpg"),
         "Фудзи": img("Fuji.jpg"),
         "Суши": img("Sushi.jpg"),
