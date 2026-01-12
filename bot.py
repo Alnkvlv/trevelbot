@@ -1,12 +1,13 @@
 import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputFile
+from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from aiogram.types import Message
+
 # ==============================
 # CONFIG
 # ==============================
@@ -27,51 +28,11 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 # ==============================
-# TEXT SPLITTER
-# ==============================
-async def send_long_text(message: Message, text: str, reply_markup=None):
-    MAX_LEN = 4000
-    for i in range(0, len(text), MAX_LEN):
-        await message.answer(
-            text[i:i + MAX_LEN],
-            reply_markup=reply_markup if i + MAX_LEN >= len(text) else None
-        )
-
-
-serbia_food_captions = {
-    "cevapcici": "🍢 Ćevapčići — мясные колбаски",
-    "pljeskavica": "🍔 Pljeskavica — балканский бургер",
-    "burek": "🥐 Burek — слоёный пирог",
-}
-
-# ==============================
 # FSM
 # ==============================
 class Form(StatesGroup):
     country = State()
     section = State()
-
-def nav_keyboard(index: int, max_i: int):
-    buttons = []
-
-    if index > 0:
-        buttons.append(
-            InlineKeyboardButton(
-                text="⬅️",
-                callback_data=f"nav:{index-1}"
-            )
-        )
-
-    if index < max_i - 1:
-        buttons.append(
-            InlineKeyboardButton(
-                text="➡️",
-                callback_data=f"nav:{index+1}"
-            )
-        )
-
-    return InlineKeyboardMarkup(inline_keyboard=[buttons])
-
 
 # ==============================
 # DATA
@@ -1266,34 +1227,35 @@ text_sections = [
 ]
 
 def countries_keyboard():
-    buttons = [
-        [InlineKeyboardButton(text=country, callback_data=f"country:{country}")]
-        for country in countries_info
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=c, callback_data=f"country:{c}")]
+            for c in countries_info
+        ]
+    )
 
 def section_keyboard():
-    buttons = [
-        [InlineKeyboardButton(text="📌 Правила", callback_data="section:rules"),
-         InlineKeyboardButton(text="🛂 Документы", callback_data="section:docs")],
-        [InlineKeyboardButton(text="🎒 Что взять", callback_data="section:items"),
-         InlineKeyboardButton(text="📍 Места", callback_data="section:places")],
-        [InlineKeyboardButton(text="🍽 Кухня", callback_data="section:food")],
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📌 Правила", callback_data="section:Важные правила и особенности"),
+            InlineKeyboardButton(text="🛂 Документы", callback_data="section:Требуемые документы"),
+        ],
+        [
+            InlineKeyboardButton(text="🎒 Что взять", callback_data="section:Список вещей, которые стоит взять"),
+            InlineKeyboardButton(text="📍 Места", callback_data="section:Популярные места для посещения"),
+        ],
+        [InlineKeyboardButton(text="🍽 Кухня", callback_data="section:Национальная кухня")],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="section:back")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    ])
 
 # ==============================
 # HANDLERS
 # ==============================
-@dp.message()
+@dp.message(CommandStart())
 async def start(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer(
-        "🌍 Выберите страну:",
-        reply_markup=countries_keyboard()
-    )
     await state.set_state(Form.country)
+    await message.answer("🌍 Выберите страну:", reply_markup=countries_keyboard())
 
 @dp.callback_query(lambda c: c.data.startswith("country:"))
 async def country_chosen(call: types.CallbackQuery, state: FSMContext):
@@ -1314,8 +1276,8 @@ async def section_chosen(call: types.CallbackQuery, state: FSMContext):
     info = countries_info[country]
 
     if section == "back":
-        await call.message.answer("🌍 Выберите страну:", reply_markup=countries_keyboard())
         await state.set_state(Form.country)
+        await call.message.answer("🌍 Выберите страну:", reply_markup=countries_keyboard())
         await call.answer()
         return
 
@@ -1347,7 +1309,6 @@ async def on_startup(bot: Bot):
 
 async def on_shutdown(bot: Bot):
     await bot.delete_webhook()
-    
 
 def main():
     app = web.Application()
@@ -1355,12 +1316,7 @@ def main():
     setup_application(app, dp, bot=bot)
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
-    web.run_app(
-    app,
-    host="0.0.0.0",
-    port=PORT,
-    handle_signals=False
-)
+    web.run_app(app, host="0.0.0.0", port=PORT, handle_signals=False)
 
 if __name__ == "__main__":
     main()
