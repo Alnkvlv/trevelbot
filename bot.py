@@ -1347,7 +1347,7 @@ async def on_startup(bot: Bot):
 
 async def on_shutdown(bot: Bot):
     await bot.delete_webhook()
-    await bot.session.close()
+    
 
 def main():
     app = web.Application()
@@ -1355,7 +1355,12 @@ def main():
     setup_application(app, dp, bot=bot)
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
-    web.run_app(app, host="0.0.0.0", port=PORT)
+    web.run_app(
+    app,
+    host="0.0.0.0",
+    port=PORT,
+    handle_signals=False
+)
 
 if __name__ == "__main__":
     main()
