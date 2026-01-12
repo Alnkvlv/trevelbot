@@ -10,7 +10,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 # ==============================
 # CONFIG
 # ==============================
-TOKEN = os.getenv("8406572547:AAHOsQCigKWhwwrNnkfylIgp96VUxS6YeCY")
+TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
 
